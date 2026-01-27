@@ -13,13 +13,14 @@ export const createSupabaseServerClient = () => {
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      getAll() {
-        return cookieStore.getAll();
+      get(name) {
+        return cookieStore.get(name)?.value;
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
+      set(name, value, options) {
+        cookieStore.set({ name, value, ...options });
+      },
+      remove(name, options) {
+        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
       },
     },
   });
