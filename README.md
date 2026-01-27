@@ -11,6 +11,15 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
+## Install & run
+
+```bash
+npm install
+npm run dev
+```
+
+App akan berjalan di `http://localhost:3000` secara default.
+
 > Tidak ada service role key di client. RPC `accept_invitation` dan `revoke_invitation` berjalan dengan `SECURITY DEFINER` di database.
 
 ## Jalankan migration
