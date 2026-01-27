@@ -22,6 +22,19 @@ App akan berjalan di `http://localhost:3000` secara default.
 
 > Tidak ada service role key di client. RPC `accept_invitation` dan `revoke_invitation` berjalan dengan `SECURITY DEFINER` di database.
 
+## Manual test auth flow
+
+1. `npm run dev`
+2. Buka `/`
+3. Login dengan Google
+4. Redirect ke `/ledgers`
+5. Klik logout untuk kembali ke `/`
+
+Pastikan redirect OAuth di Supabase Dashboard sudah mengizinkan:
+
+- `http://localhost:3000/auth/callback`
+- `https://<domain>/auth/callback`
+
 ## Jalankan migration
 
 Jalankan SQL migration berikut di Supabase SQL editor atau dengan CLI migrasi Supabase:
