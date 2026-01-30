@@ -14,19 +14,19 @@ export default function InviteForm({ ledgerId }: InviteFormProps) {
   const [state, formAction] = useFormState(inviteByEmailWithId, initialState);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <h3 className="text-sm font-semibold text-white">Invite by email</h3>
+    <div className="glass-panel rounded-2xl p-4">
+      <h3 className="text-sm font-semibold">Invite by email</h3>
       <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row">
         <input
           type="email"
           name="email"
           placeholder="email@domain.com"
-          className="flex-1 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/50"
+          className="glass-input flex-1 rounded-full px-4 py-2 text-sm placeholder:text-[color:var(--text-faint)]"
           required
         />
         <button
           type="submit"
-          className="rounded-full border border-white/20 bg-white/20 px-5 py-2 text-sm font-medium text-white"
+          className="glass-button rounded-full px-5 py-2 text-sm font-medium"
         >
           Send Invite
         </button>

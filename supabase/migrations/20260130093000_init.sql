@@ -1,3 +1,7 @@
+-- Wallev initial schema (consolidated)
+
+create extension if not exists "pgcrypto";
+
 create table if not exists public.ledgers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -47,15 +51,26 @@ create unique index if not exists invitations_unique_pending_idx
   on public.invitations (ledger_id, invited_email)
   where status = 'pending';
 
+-- Membership helpers (security definer + RLS bypass to avoid recursion)
 create or replace function public.is_ledger_member(p_ledger_id uuid)
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
+set row_security = off
 as $$
-  select exists (
-    select 1 from public.ledger_members
-    where ledger_id = p_ledger_id
-      and user_id = auth.uid()
+  select (
+    exists (
+      select 1 from public.ledger_members
+      where ledger_id = p_ledger_id
+        and user_id = auth.uid()
+    )
+    or exists (
+      select 1 from public.ledgers
+      where id = p_ledger_id
+        and owner_id = auth.uid()
+    )
   );
 $$;
 
@@ -63,6 +78,9 @@ create or replace function public.is_ledger_owner(p_ledger_id uuid)
 returns boolean
 language sql
 stable
+security definer
+set search_path = public
+set row_security = off
 as $$
   select exists (
     select 1 from public.ledgers
@@ -85,6 +103,19 @@ set search_path = public
 as $$
   select id from auth.users where lower(email) = lower(p_email) limit 1;
 $$;
+
+grant execute on function public.is_ledger_member(uuid) to authenticated;
+grant execute on function public.is_ledger_owner(uuid) to authenticated;
+
+-- Backfill owners as members (safe for empty DBs)
+insert into public.ledger_members (ledger_id, user_id, role, created_at)
+select l.id, l.owner_id, 'owner', now()
+from public.ledgers l
+where l.owner_id is not null
+  and not exists (
+    select 1 from public.ledger_members m
+    where m.ledger_id = l.id and m.user_id = l.owner_id
+  );
 
 alter table public.ledgers enable row level security;
 alter table public.ledger_members enable row level security;
@@ -190,17 +221,13 @@ grant select (
 ) on public.invitations to authenticated;
 
 grant insert on public.invitations to authenticated;
-
 grant update on public.invitations to authenticated;
 
 grant select on public.ledgers to authenticated;
-
 grant select on public.ledger_members to authenticated;
-
 grant select on public.transactions to authenticated;
 
 grant insert on public.ledgers, public.ledger_members, public.transactions to authenticated;
-
 grant update, delete on public.ledgers, public.ledger_members, public.transactions to authenticated;
 
 create or replace view public.invitations_safe as
@@ -313,3 +340,93 @@ begin
   return true;
 end;
 $$;
+
+-- Analytics RPC Functions
+create or replace function public.get_ledger_timeseries(
+  p_ledger_id uuid,
+  p_from date,
+  p_to date,
+  p_bucket text
+)
+returns table(
+  bucket date,
+  income numeric,
+  expense numeric,
+  net numeric
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_bucket_expr text;
+begin
+  if not public.is_ledger_member(p_ledger_id) then
+    raise exception 'Not authorized';
+  end if;
+
+  case p_bucket
+    when 'daily' then
+      v_bucket_expr := 'occurred_at::date';
+    when 'weekly' then
+      v_bucket_expr := 'date_trunc(''week'', occurred_at)::date';
+    when 'monthly' then
+      v_bucket_expr := 'date_trunc(''month'', occurred_at)::date';
+    else
+      raise exception 'Invalid bucket: %', p_bucket;
+  end case;
+
+  return query execute format(
+    'select
+      %s as bucket,
+      coalesce(sum(case when kind = ''income'' then amount else 0 end), 0::numeric) as income,
+      coalesce(sum(case when kind = ''expense'' then amount else 0 end), 0::numeric) as expense,
+      coalesce(sum(case when kind = ''income'' then amount else 0 end), 0::numeric) -
+      coalesce(sum(case when kind = ''expense'' then amount else 0 end), 0::numeric) as net
+    from public.transactions
+    where ledger_id = $1
+      and occurred_at between $2 and $3
+    group by %s
+    order by %s asc',
+    v_bucket_expr,
+    v_bucket_expr,
+    v_bucket_expr
+  )
+  using p_ledger_id, p_from, p_to;
+end;
+$$;
+
+create or replace function public.get_ledger_category_breakdown(
+  p_ledger_id uuid,
+  p_from date,
+  p_to date,
+  p_kind text default 'expense'
+)
+returns table(
+  category text,
+  total numeric
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_ledger_member(p_ledger_id) then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+  select
+    coalesce(nullif(trim(t.category), ''), 'Uncategorized')::text as category,
+    round(sum(t.amount), 2)::numeric as total
+  from public.transactions t
+  where t.ledger_id = p_ledger_id
+    and t.occurred_at between p_from and p_to
+    and t.kind = p_kind
+  group by coalesce(nullif(trim(t.category), ''), 'Uncategorized')
+  order by total desc;
+end;
+$$;
+
+grant execute on function public.get_ledger_timeseries(uuid, date, date, text) to authenticated;
+grant execute on function public.get_ledger_category_breakdown(uuid, date, date, text) to authenticated;

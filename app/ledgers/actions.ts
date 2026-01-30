@@ -53,6 +53,11 @@ export interface InviteState {
   invitationId?: string;
 }
 
+export interface TransactionState {
+  error?: string;
+  success?: boolean;
+}
+
 export async function inviteByEmail(
   ledgerId: string,
   _prevState: InviteState,
@@ -140,4 +145,124 @@ export async function revokeInvitation(invitationId: string, ledgerId: string) {
   }
 
   revalidatePath(`/ledgers/${ledgerId}`);
+}
+
+// Transaction CRUD server actions
+export async function createTransaction(
+  _prevState: TransactionState,
+  formData: FormData
+): Promise<TransactionState> {
+  const ledgerId = String(formData.get('ledgerId') ?? '').trim();
+  const occurred_at = String(formData.get('occurred_at') ?? '').trim();
+  const kind = String(formData.get('kind') ?? '').trim();
+  const amountRaw = String(formData.get('amount') ?? '').trim();
+  const category = String(formData.get('category') ?? '').trim() || null;
+  const note = String(formData.get('note') ?? '').trim() || null;
+
+  if (!ledgerId || !occurred_at || !kind || !amountRaw) {
+    return { error: 'Missing transaction fields' };
+  }
+
+  const amount = Number(amountRaw);
+  if (Number.isNaN(amount) || amount <= 0) {
+    return { error: 'Amount must be > 0' };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    return { error: 'You must be logged in' };
+  }
+
+  // Double-check ledger exists
+  const { data: ledger, error: ledgerError } = await supabase
+    .from('ledgers')
+    .select('id, type, owner_id')
+    .eq('id', ledgerId)
+    .single();
+
+  if (ledgerError || !ledger) {
+    return { error: ledgerError?.message ?? 'Ledger not found' };
+  }
+
+  const { error } = await supabase.from('transactions').insert({
+    ledger_id: ledgerId,
+    created_by: userData.user.id,
+    occurred_at: occurred_at,
+    kind,
+    amount,
+    category,
+    note,
+  });
+
+  console.log('Transaction data:', { ledgerId, occurred_at, kind, amount, category, note });
+  console.log('User ID:', userData.user.id);
+  console.log('Ledger:', ledger);
+  if (error) {
+    const msg = typeof error.message === 'string' ? error.message : 'Failed to create transaction';
+    console.error('Error creating transaction:', error);
+    return { error: msg };
+  }
+
+  revalidatePath(`/ledgers/${ledgerId}`);
+  return { success: true };
+}
+
+export async function updateTransaction(
+  _prevState: TransactionState,
+  formData: FormData
+): Promise<TransactionState> {
+  const transactionId = String(formData.get('transactionId') ?? '').trim();
+  const occurred_at = String(formData.get('occurred_at') ?? '').trim();
+  const kind = String(formData.get('kind') ?? '').trim();
+  const amountRaw = String(formData.get('amount') ?? '').trim();
+  const category = String(formData.get('category') ?? '').trim() || null;
+  const note = String(formData.get('note') ?? '').trim() || null;
+
+  if (!transactionId) {
+    return { error: 'Missing transaction id' };
+  }
+
+  const amount = Number(amountRaw);
+  if (Number.isNaN(amount) || amount <= 0) {
+    return { error: 'Amount must be > 0' };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    return { error: 'You must be logged in' };
+  }
+
+
+  const { error } = await supabase
+    .from('transactions')
+    .update({ occurred_at, kind, amount, category, note })
+    .eq('id', transactionId);
+
+  if (error) {
+    const msg = typeof error.message === 'string' ? error.message : 'Failed to update transaction';
+    return { error: msg };
+  }
+
+  return { success: true };
+}
+
+export async function deleteTransaction(
+  _prevState: TransactionState,
+  formData: FormData
+): Promise<TransactionState> {
+  const transactionId = String(formData.get('transactionId') ?? '').trim();
+  if (!transactionId) {
+    return { error: 'Missing transaction id' };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase.from('transactions').delete().eq('id', transactionId);
+  if (error) {
+    const msg = typeof error.message === 'string' ? error.message : 'Failed to delete transaction';
+    return { error: msg };
+  }
+
+  return { success: true };
 }

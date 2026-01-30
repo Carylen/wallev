@@ -13,14 +13,23 @@ export const createSupabaseServerClient = () => {
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name) {
+      get(name: string) {
         return cookieStore.get(name)?.value;
       },
-      set(name, value, options) {
-        cookieStore.set({ name, value, ...options });
+      // NOTE:
+      // Modifying cookies is not allowed during normal Server Component
+      // rendering in Next.js (only Server Actions or Route Handlers may
+      // modify cookies). To avoid runtime errors like:
+      // "Cookies can only be modified in a Server Action or Route Handler",
+      // we provide no-op implementations for `set` and `remove` here.
+      // This means server-side code won't persist new cookies via this
+      // helper; token refresh flows that attempt to set cookies should
+      // be handled in Server Actions or Route Handlers instead.
+      set() {
+        // no-op in server component context
       },
-      remove(name, options) {
-        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
+      remove() {
+        // no-op in server component context
       },
     },
   });
