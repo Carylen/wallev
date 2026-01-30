@@ -5,6 +5,7 @@ node_modules/
 .vscode/
 .idea/
 .DS_Store
+supabase/.temp/
 .env.local
 .env.development.local
 .env.test.local
