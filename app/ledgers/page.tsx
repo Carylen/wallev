@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSharedLedger } from './actions';
 import AuthButton from '@/components/auth-button';
-import Sidebar from '@/components/sidebar';
+import ThemeToggle from '@/components/theme-toggle';
 
 export default async function LedgersPage() {
   const supabase = createSupabaseServerClient();
@@ -18,15 +18,14 @@ export default async function LedgersPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-12 lg:grid-cols-[240px_1fr]">
-        <Sidebar />
+      <div className="mx-auto max-w-4xl px-6 py-12">
         <div className="glass-card rounded-3xl p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-faint">
                 Shared Ledger
               </p>
-              <h1 className="text-3xl font-semibold">Ledger Anda</h1>
+              <h1 className="text-3xl font-semibold">Your Ledgers</h1>
             </div>
             <div className="flex items-center gap-3">
               {!user && <AuthButton redirectTo="/ledgers" />}
@@ -38,6 +37,7 @@ export default async function LedgersPage() {
                   Profile
                 </Link>
               )}
+              <ThemeToggle />
             </div>
           </div>
 
@@ -80,14 +80,14 @@ export default async function LedgersPage() {
                   ))
                 ) : (
                   <p className="text-sm text-muted">
-                    Belum ada ledger. Buat shared ledger pertama Anda.
+                    No ledger yet. Create your first shared ledger.
                   </p>
                 )}
               </div>
             </div>
           ) : (
             <p className="mt-6 text-sm text-muted">
-              Silakan login untuk melihat ledger Anda.
+              Please login to view your ledgers.
             </p>
           )}
         </div>
